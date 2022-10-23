@@ -176,3 +176,65 @@ ALTER TABLE `paid_periods`
 --
 ALTER TABLE `vacations`
   ADD CONSTRAINT `vacation_category_id_index` FOREIGN KEY (`vacation_category_id`) REFERENCES `vacation_categories` (`id`) ON UPDATE CASCADE;
+
+INSERT INTO `users` (`name`, `login_id`, `password`) VALUES ('test', 'test', 'test');
+INSERT INTO `vacation_types` (`id`, `name`) VALUES 
+(10, '有給休暇(全休)'),
+(20, '有給休暇(午前休)'),
+(30, '有給休暇(午後休)'),
+(40, '欠勤'),
+(50, '遅刻'),
+(60, '早退'),
+(70, '代休'),
+(80, '特別休暇'),
+(90, '休業');
+
+CREATE PROCEDURE `get_attendance_table` (IN `@user_id` INT, IN `@calendar` CHAR(6))
+BEGIN
+	SET @target_id = (SELECT `id` FROM `attendances` WHERE `user_id` = `@user_id` AND DATE_FORMAT(calendar, '%Y%m') = `@calendar`);
+	IF @target_id IS NULL THEN
+		SET @json_data = JSON_ARRAY();
+		CALL create_calendar_json_data(`@calendar`, @json_data);
+    INSERT INTO `attendances` (`user_id`, `calendar`, `data`) VALUES(`@user_id`, CONCAT(`@calendar`, '01'), @json_data);
+    SET @target_id = (SELECT LAST_INSERT_ID());
+	END IF;
+	SET @json_obj = IFNULL((SELECT `data` FROM `attendances` WHERE `id` = @target_id), '[]');
+	SELECT * FROM JSON_TABLE(@json_obj, "$[*]" COLUMNS(
+		`id` INT PATH "$.id",
+		`join` INT PATH "$.join",
+		`leave` INT PATH "$.leave",
+		`rest` INT PATH "$.rest",
+		`type` INT PATH "$.type"
+	)) AS jt;
+END;
+
+CREATE PROCEDURE `create_calendar_json_data` (IN `@calendar` CHAR(6), OUT `@json_data` JSON)
+BEGIN
+  SET @id = 1;
+  SET @json_obj = JSON_ARRAY();
+  SELECT DATE_FORMAT(LAST_DAY(CONCAT(`@calendar`, '01')), '%d') INTO @last_day;
+  WHILE @id <= @last_day DO
+    SELECT JSON_ARRAY_APPEND(@json_obj, '$', JSON_OBJECT('id', @id)) INTO @json_obj;
+    SET @id = @id + 1;
+  END WHILE;
+  SET `@json_data` = @json_obj;
+END;
+
+CREATE PROCEDURE `update_to_attendance` (IN `@attendance_id` INT, IN `@id` INT, IN `@join` CHAR(5), IN `@leave` CHAR(5), IN `@rest` CHAR(5), IN `@type` INT)
+BEGIN
+	SELECT CONCAT('$[',`@id` - 1,']') INTO @target_obj;
+	UPDATE 
+		attendances, 
+		(SELECT 
+			JSON_OBJECT(
+				'id', `@id`,
+				'join', IFNULL(TIME_TO_SEC(`@join`), 0), 
+				'leave', IFNULL(TIME_TO_SEC(`@leave`), 0), 
+				'rest', IFNULL(TIME_TO_SEC(`@rest`), 0), 
+				'type', `@type`) AS json_obj
+		) AS J 
+	SET 
+		`data`=JSON_REPLACE(`data`, @target_obj, J.json_obj) WHERE `id` = `@attendance_id`;
+  SELECT ROW_COUNT() INTO @c;
+  SELECT @c;
+END;
