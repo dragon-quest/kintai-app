@@ -1,9 +1,5 @@
-from flask import Flask, jsonify
-from dotenv import dotenv_values
-import mysql.connector
+from flask import Flask, jsonify, request
 from db import DatabaseManager
-
-config = dotenv_values(".env")
 
 app = Flask(__name__)
 
@@ -13,117 +9,96 @@ def hello():
     return "Hello World"
 
 
-@app.route("/attendances")
+@app.route("/login", methods=["GET"])
+def login():
+    if request.method == "GET":
+        login_id = request.args.get("login_id")
+        password = request.args.get("password")
+        sql = """
+            SELECT 
+                id, login_id, name
+            FROM 
+                users 
+            WHERE 
+                login_id = %s AND 
+                password = %s
+        """
+        result, status_code = DatabaseManager().execute(sql, (login_id, password), request.method)
+        response = jsonify({'data': result}) if status_code == 200 else jsonify({'error': result})
+        return response, status_code
+    else:
+        response = jsonify({'error': "not found"})
+        return response, 404
+
+
+@app.route("/attendances", methods=["GET", "PUT"])
 def attendances():
-    # コネクション作成
-    conn = mysql.connector.connect(
-        host=config['DB_HOST'],
-        port=config['DB_PORT'],
-        user=config['DB_USER'],
-        password=config['DB_PASSWORD'],
-        database=config['DB_DATABASE']
-    )
-
-    # 接続状況確認
-    if conn.is_connected():
-        try:
-            # 再接続を行うように設定
-            conn.ping(reconnect=True)
-
-            # カーソル作成
-            cr = conn.cursor()
-
-            # クエリを作成
-            sql = ('''
-                SELECT * FROM attendances
-            ''')
-
-            # selectを実行
-            cr.execute(sql)
-
-            # 全データ取得
-            rows = cr.fetchall()
-
-            # 実行結果
-            response = {
-                'data': rows
-            }
-            return jsonify(response), 200
-
-        except mysql.connector.Error as e:
-            response = {
-                'error': e
-            }
-            return jsonify(response), 400
-
-        finally:
-            # クローズ
-            if cr is not None:
-                cr.close()
-            if conn is not None and conn.is_connected():
-                conn.close()
+    if request.method == "GET":
+        user_id = request.args.get("user_id")
+        calendar = request.args.get("calendar")
+        result, status_code = DatabaseManager().proc('get_attendance_table', (user_id, calendar))
+        response = jsonify({'data': result}) if status_code == 200 else jsonify({'error': result})
+        return response, status_code
+    elif request.method == "PUT":
+        attendance_id = request.args.get("attendance_id")
+        day = request.args.get("id")
+        join = request.args.get("join")
+        leave = request.args.get("leave")
+        rest = request.args.get("rest")
+        cate = request.args.get("cate")
+        result, status_code = DatabaseManager().proc('update_attendance_table', (attendance_id, day, join, leave, rest, cate))
+        response = jsonify({'data': result}) if status_code == 200 else jsonify({'error': result})
+        return response, status_code
     else:
-        response = {
-            'error': 'database connection failed.'
-        }
-        return jsonify(response), 500
+        response = jsonify({'error': "not found"})
+        return response, 404
 
 
-@app.route("/get_attendance")
-def get_attendance_table():
-    # コネクション作成
-    conn = mysql.connector.connect(
-        host=config['DB_HOST'],
-        port=config['DB_PORT'],
-        user=config['DB_USER'],
-        password=config['DB_PASSWORD'],
-        database=config['DB_DATABASE']
-    )
-
-    # 接続状況確認
-    if conn.is_connected():
-        try:
-            # 再接続を行うように設定
-            conn.ping(reconnect=True)
-
-            # カーソル作成
-            cr = conn.cursor()
-
-            # クエリを作成
-            args = (1, '202210')
-            cr.execute("call get_attendance_table(:a, :b)", [1, '202210'])
-            results = list(cr.fetchall())
-
-            # 実行結果
-            response = {
-                'data': results
-            }
-            return jsonify(response), 200
-
-        except mysql.connector.Error as e:
-            response = {
-                'error': e
-            }
-            return jsonify(response), 400
-
-        finally:
-            # クローズ
-            if cr is not None:
-                cr.close()
-            if conn is not None and conn.is_connected():
-                conn.close()
+@app.route("/vacations", methods=["GET", "POST", "DELETE"])
+def vacations():
+    if request.method == "GET":
+        user_id = request.args.get("user_id")
+        leave_date = request.args.get("leave_date")
+        sql = """
+            SELECT 
+                id, 
+                user_id, 
+                DATE_FORMAT(leave_date, '%Y-%m-%d') AS leave_date, 
+                vacation_category_id, 
+                remarks 
+            FROM 
+                vacations 
+            WHERE 
+                user_id=%s AND 
+                leave_date=%s AND 
+                deleted_at IS NULL
+        """
+        result, status_code = DatabaseManager().execute(sql, (user_id, leave_date), request.method)
+        response = jsonify({'data': result}) if status_code == 200 else jsonify({'error': result})
+        return response, status_code
+    elif request.method == "POST":
+        user_id = request.args.get("user_id")
+        leave_date = request.args.get("leave_date")
+        vacation_category_id = request.args.get("vacation_category_id")
+        remarks = request.args.get("remarks")
+        sql = """
+            INSERT INTO vacations 
+                (user_id, leave_date, vacation_category_id, remarks) 
+            VALUES 
+                (%s, %s, %s, %s)
+        """
+        result, status_code = DatabaseManager().execute(sql, (user_id, leave_date, vacation_category_id, remarks), request.method)
+        response = jsonify({'data': result}) if status_code == 200 else jsonify({'error': result})
+        return response, status_code
+    elif request.method == "DELETE":
+        id = request.args.get("id")
+        sql = "UPDATE vacations SET deleted_at=NOW() WHERE id=%s"
+        result, status_code = DatabaseManager().execute(sql, (id, ), request.method)
+        response = jsonify({'data': result}) if status_code == 200 else jsonify({'error': result})
+        return response, status_code
     else:
-        response = {
-            'error': 'database connection failed.'
-        }
-        return jsonify(response), 500
-
-
-@app.route("/attendance_table")
-def attendance_table():
-    res, status_code = DatabaseManager().proc('get_attendance_table', (1, '202211'))
-    response = jsonify({'data': res}) if status_code == 200 else jsonify({'error': res})
-    return response, status_code
+        response = jsonify({'error': "not found"})
+        return response, 404
 
 
 if __name__ == "__main__":

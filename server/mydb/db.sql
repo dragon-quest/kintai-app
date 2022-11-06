@@ -124,6 +124,7 @@ ALTER TABLE `users`
 --
 ALTER TABLE `vacations`
   ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `user_id_leave_date_unique` (`user_id`,`leave_date`) USING BTREE,
   ADD KEY `vacation_category_id_index` (`vacation_category_id`) USING BTREE,
   ADD KEY `user_id_index` (`user_id`) USING BTREE;
 
@@ -242,6 +243,9 @@ BEGIN
 	SET 
 		`data`=JSON_REPLACE(`data`, @target_obj, J.json_obj) WHERE `id` = `@attendance_id`;
   SELECT ROW_COUNT() INTO @cnt;
+  IF @cnt = 1 THEN
+      COMMIT;
+  END IF;
   SELECT @cnt AS row_count;
 END;
 //
