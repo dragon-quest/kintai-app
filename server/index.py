@@ -46,7 +46,8 @@ def attendances():
         leave = request.args.get("leave")
         rest = request.args.get("rest")
         cate = request.args.get("cate")
-        result, status_code = DatabaseManager().proc('update_attendance_table', (attendance_id, day, join, leave, rest, cate))
+        result, status_code = DatabaseManager().proc(
+            'update_attendance_table', (attendance_id, day, join, leave, rest, cate))
         response = jsonify({'data': result}) if status_code == 200 else jsonify({'error': result})
         return response, status_code
     else:
@@ -73,7 +74,8 @@ def vacations():
                 leave_date=%s AND 
                 deleted_at IS NULL
         """
-        result, status_code = DatabaseManager().execute(sql, (user_id, leave_date), request.method)
+        result, status_code = DatabaseManager().execute(
+            sql, (user_id, leave_date), request.method)
         response = jsonify({'data': result}) if status_code == 200 else jsonify({'error': result})
         return response, status_code
     elif request.method == "POST":
@@ -87,13 +89,37 @@ def vacations():
             VALUES 
                 (%s, %s, %s, %s)
         """
-        result, status_code = DatabaseManager().execute(sql, (user_id, leave_date, vacation_category_id, remarks), request.method)
+        result, status_code = DatabaseManager().execute(
+            sql, (user_id, leave_date, vacation_category_id, remarks), request.method)
         response = jsonify({'data': result}) if status_code == 200 else jsonify({'error': result})
         return response, status_code
     elif request.method == "DELETE":
         id = request.args.get("id")
         sql = "UPDATE vacations SET deleted_at=NOW() WHERE id=%s"
         result, status_code = DatabaseManager().execute(sql, (id, ), request.method)
+        response = jsonify({'data': result}) if status_code == 200 else jsonify({'error': result})
+        return response, status_code
+    else:
+        response = jsonify({'error': "not found"})
+        return response, 404
+
+
+@app.route("/api/vacation_categories", methods=["GET"])
+def vacation_categories():
+    if request.method == "GET":
+        sql = """
+            SELECT 
+                id, 
+                name, 
+                created_at, 
+                updated_at, 
+                deleted_at 
+            FROM 
+                vacation_categories
+            WHERE 
+                deleted_at IS NULL
+        """
+        result, status_code = DatabaseManager().execute(sql, (), request.method)
         response = jsonify({'data': result}) if status_code == 200 else jsonify({'error': result})
         return response, status_code
     else:
