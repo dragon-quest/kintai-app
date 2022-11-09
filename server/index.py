@@ -5,12 +5,13 @@ from db import DatabaseManager
 app = Flask(__name__)
 CORS(app)
 
+
 @app.route("/")
 def hello():
     return "Hello World"
 
 
-@app.route("/login", methods=["GET"])
+@app.route("/api/login", methods=["GET"])
 def login():
     if request.method == "GET":
         login_id = request.args.get("login_id")

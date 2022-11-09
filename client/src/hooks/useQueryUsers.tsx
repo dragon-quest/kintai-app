@@ -16,15 +16,17 @@ export const useQueryUsers = () => {
   })
 }
 
-const login = async () => {
-  const { data } = await axios.get<User>('http://127.0.0.1:8000/api/login/')
+const login = async (params: any) => {
+  const { data } = await axios.get<User>('http://127.0.0.1:5000/api/login')
   return data
 }
 
-export const useQueryLogin = () => {
+export const useQueryLogin = (params: any) => {
   return useQuery<User, Error>({
     queryKey: ['user'],
-    queryFn: login,
+    queryFn: (): Promise<User> => {
+      return login(params)
+    },
     cacheTime: 10000,
     staleTime: 0,
   })

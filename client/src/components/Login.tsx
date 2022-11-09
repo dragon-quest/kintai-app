@@ -1,11 +1,18 @@
 import { FC } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
+import { useQueryLogin } from '../hooks/useQueryUsers'
 
 export const Login: FC = () => {
   const navigate = useNavigate()
   const { register, handleSubmit } = useForm()
-  const onSubmit = (d: any) => navigate('/home')
+  const { status, data } = useQueryLogin({ login_id: 'test', password: 'test' })
+  const onSubmit = (d: any) => {
+    navigate('/home')
+  }
+
+  if (status === 'loading') return <div>{'Loading...'}</div>
+  if (status === 'error') return <div>{'Error'}</div>
 
   return (
     <main className="flex justify-center">
